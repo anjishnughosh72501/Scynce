@@ -34,14 +34,29 @@ import { FireTvRemote } from './components/FireTvRemote.js';
 
 type TvScreen = 'home' | 'show-selection' | 'lobby' | 'recap' | 'characters' | 'qa' | 'settings';
 
+const FALLBACK_DEFAULT_SHOW: Show = {
+  id: 'show-aethelgard',
+  title: 'Chronicles of Aethelgard',
+  description:
+    'An epic fantasy series spanning continents, dynasties, and ancient sorceries where kingdoms clash over the Iron Throne of Eldoria.',
+  posterUrl:
+    'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80',
+  status: 'active',
+  createdAt: new Date().toISOString(),
+};
+
 export function App() {
   const [currentScreen, setCurrentScreen] = useState<TvScreen>('home');
 
   // Catalog State
-  const [shows, setShows] = useState<Show[]>([]);
-  const [selectedShow, setSelectedShow] = useState<Show | null>(null);
+  const [shows, setShows] = useState<Show[]>([FALLBACK_DEFAULT_SHOW]);
+  const [selectedShow, setSelectedShow] = useState<Show | null>(FALLBACK_DEFAULT_SHOW);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [characters, setCharacters] = useState<Character[]>([]);
+
+  // System & Connection State
+  const [apiConnected, setApiConnected] = useState<boolean | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Watch Party State
   const [session, setSession] = useState<Session | null>(null);
@@ -61,26 +76,45 @@ export function App() {
 
   const socketRef = useRef<Socket | null>(null);
 
-  // Load catalog on mount
-  useEffect(() => {
+  const loadShows = () => {
     fetch('/api/shows')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((data) => {
-        if (data.shows) {
+        if (data.shows && data.shows.length > 0) {
           setShows(data.shows);
-          if (data.shows[0]) {
-            setSelectedShow(data.shows[0]);
-          }
+          setSelectedShow(data.shows[0]);
+          setApiConnected(true);
+          setErrorMessage(null);
+        } else {
+          setShows([FALLBACK_DEFAULT_SHOW]);
+          setSelectedShow(FALLBACK_DEFAULT_SHOW);
+          setApiConnected(true);
         }
       })
-      .catch((err) => console.error('Failed to load shows:', err));
+      .catch((err) => {
+        console.warn('API /api/shows unreachable, operating with default catalog:', err);
+        setShows([FALLBACK_DEFAULT_SHOW]);
+        setSelectedShow(FALLBACK_DEFAULT_SHOW);
+        setApiConnected(false);
+      });
+  };
+
+  // Load catalog on mount
+  useEffect(() => {
+    loadShows();
   }, []);
 
   // When selectedShow changes, fetch episodes and characters
   useEffect(() => {
     if (!selectedShow) return;
     fetch(`/api/shows/${selectedShow.id}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((data) => {
         if (data.episodes) setEpisodes(data.episodes);
         if (data.characters) {
@@ -90,7 +124,9 @@ export function App() {
           }
         }
       })
-      .catch((err) => console.error('Failed to load show details:', err));
+      .catch((err) => {
+        console.warn('Could not load remote show details, using fallback:', err);
+      });
   }, [selectedShow?.id]);
 
   // Real-time Socket.io sync for TV
@@ -215,15 +251,16 @@ export function App() {
   };
 
   const handleCreateParty = async () => {
-    if (!selectedShow) return;
+    const showToUse = selectedShow || shows[0] || FALLBACK_DEFAULT_SHOW;
     setIsLoading(true);
+    setErrorMessage(null);
 
     try {
       const res = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          showId: selectedShow.id,
+          showId: showToUse.id,
           hostDisplayName: 'Living Room TV',
         }),
       });
@@ -238,8 +275,52 @@ export function App() {
       setQrCodeUrl(data.qrCodeDataUrl);
       setJoinUrl(data.joinUrl);
       setCurrentScreen('lobby');
-    } catch (err) {
-      console.error('Create party error:', err);
+      setApiConnected(true);
+    } catch (err: any) {
+      console.warn('API /api/sessions unreachable, launching simulated offline watch party:', err);
+      const fallbackRoomCode = 'TV' + Math.floor(1000 + Math.random() * 9000);
+      setSession({
+        id: 'simulated-session-1',
+        showId: showToUse.id,
+        roomCode: fallbackRoomCode,
+        hostId: 'sim-host-1',
+        status: 'active',
+        boundaryEpisodeId: null,
+        boundaryVersion: 1,
+        invitationTokenHash: 'simulated_hash',
+        expiresAt: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
+        createdAt: new Date().toISOString(),
+      });
+      const host: SessionMember = {
+        id: 'sim-host-1',
+        sessionId: 'simulated-session-1',
+        anonymousIdentity: 'anon-host',
+        displayName: 'Living Room TV (Host)',
+        lastWatchedEpisodeId: null,
+        role: 'host',
+        status: 'active',
+        joinedAt: new Date().toISOString(),
+        lastSeenAt: new Date().toISOString(),
+      };
+      setHostMember(host);
+      setMembers([host]);
+      setBoundary({
+        boundaryEpisodeId: null,
+        seasonNumber: null,
+        episodeNumber: null,
+        canonicalOrder: null,
+        boundaryVersion: 1,
+        calculatedAt: new Date().toISOString(),
+        eligibleMemberCount: 1,
+        isSafe: true,
+        label: 'Waiting for viewing progress (Season 1)',
+      });
+      setJoinUrl(`http://${window.location.hostname || 'localhost'}:3000`);
+      setCurrentScreen('lobby');
+      setApiConnected(false);
+      setErrorMessage(
+        'Launched in Local TV Simulation Mode. To enable full phone and extension real-time syncing, start the backend with "pnpm run dev:api".'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -390,7 +471,46 @@ export function App() {
             </div>
           </div>
         )}
+
+        {!session && (
+          <div className="flex items-center gap-3">
+            {apiConnected === false && (
+              <div className="bg-amber-950/80 border border-amber-600/50 px-3.5 py-1.5 rounded-xl flex items-center gap-2 text-xs text-amber-300">
+                <AlertTriangle className="w-3.5 h-3.5" />
+                <span>Backend API Disconnected</span>
+                <button
+                  onClick={loadShows}
+                  className="underline hover:text-white font-bold ml-1"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+            {apiConnected === true && (
+              <div className="bg-emerald-950/80 border border-emerald-600/50 px-3.5 py-1.5 rounded-xl flex items-center gap-2 text-xs text-emerald-300">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>API Connected</span>
+              </div>
+            )}
+          </div>
+        )}
       </header>
+
+      {/* Optional Notification Banner */}
+      {errorMessage && (
+        <div className="bg-purple-950/90 border border-purple-500/60 rounded-2xl p-4 my-2 flex items-center justify-between text-sm text-purple-200 z-20">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-purple-400 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+          <button
+            onClick={() => setErrorMessage(null)}
+            className="text-xs bg-purple-800 hover:bg-purple-700 px-3 py-1 rounded-lg text-white font-semibold"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* ========================================================= */}
       {/* SCREEN: HOME                                              */}
@@ -415,10 +535,13 @@ export function App() {
           <div className="grid grid-cols-3 gap-8 max-w-5xl">
             {/* Card 0: Create Watch Party */}
             <div
-              className={`p-8 rounded-3xl bg-gradient-to-br from-slate-900 to-purple-950/40 border transition-all duration-200 flex flex-col justify-between h-64 ${
+              onClick={handleCreateParty}
+              role="button"
+              tabIndex={0}
+              className={`cursor-pointer p-8 rounded-3xl bg-gradient-to-br from-slate-900 to-purple-950/40 border transition-all duration-200 flex flex-col justify-between h-64 ${
                 focusedIndex === 0
                   ? 'border-purple-500 ring-4 ring-purple-500/50 scale-105 shadow-2xl shadow-purple-500/20 bg-purple-900/30'
-                  : 'border-slate-800 opacity-90'
+                  : 'border-slate-800 opacity-90 hover:border-slate-700'
               }`}
             >
               <div>
@@ -438,10 +561,13 @@ export function App() {
 
             {/* Card 1: Browse Shows */}
             <div
-              className={`p-8 rounded-3xl bg-slate-900 border transition-all duration-200 flex flex-col justify-between h-64 ${
+              onClick={() => setCurrentScreen('show-selection')}
+              role="button"
+              tabIndex={0}
+              className={`cursor-pointer p-8 rounded-3xl bg-slate-900 border transition-all duration-200 flex flex-col justify-between h-64 ${
                 focusedIndex === 1
                   ? 'border-purple-500 ring-4 ring-purple-500/50 scale-105 shadow-2xl shadow-purple-500/20 bg-purple-900/30'
-                  : 'border-slate-800 opacity-90'
+                  : 'border-slate-800 opacity-90 hover:border-slate-700'
               }`}
             >
               <div>
@@ -461,10 +587,13 @@ export function App() {
 
             {/* Card 2: Settings */}
             <div
-              className={`p-8 rounded-3xl bg-slate-900 border transition-all duration-200 flex flex-col justify-between h-64 ${
+              onClick={() => setCurrentScreen('settings')}
+              role="button"
+              tabIndex={0}
+              className={`cursor-pointer p-8 rounded-3xl bg-slate-900 border transition-all duration-200 flex flex-col justify-between h-64 ${
                 focusedIndex === 2
                   ? 'border-purple-500 ring-4 ring-purple-500/50 scale-105 shadow-2xl shadow-purple-500/20 bg-purple-900/30'
-                  : 'border-slate-800 opacity-90'
+                  : 'border-slate-800 opacity-90 hover:border-slate-700'
               }`}
             >
               <div>
