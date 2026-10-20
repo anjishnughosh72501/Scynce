@@ -1,0 +1,25 @@
+{
+  "name": "scenesync-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SceneSync - Fire TV-first AI watch-party companion",
+  "scripts": {
+    "build": "pnpm --filter \"./packages/*\" --filter \"./services/*\" --filter \"./apps/*\" run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:spoiler": "vitest run tests/spoiler-safety",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "vitest run tests/e2e",
+    "dev:api": "pnpm --filter @scenesync/api run dev",
+    "dev:tv": "pnpm --filter @scenesync/fire-tv-web run dev",
+    "dev:companion": "pnpm --filter @scenesync/companion-web run dev",
+    "db:migrate": "pnpm --filter @scenesync/api run db:migrate",
+    "db:seed": "pnpm --filter @scenesync/api run db:seed"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.SceneSyncFireTV" parent="Theme.Leanback">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowBackground">#070a12</item>
+    </style>
+</resources>
