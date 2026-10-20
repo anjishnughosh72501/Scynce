@@ -205,7 +205,10 @@ pnpm run dev:companion
 Open:
 - **Fire TV UI:** [http://localhost:5173](http://localhost:5173) (Use Arrow Keys + Enter + Esc, or the floating On-Screen Fire TV Remote!)
 - **Phone Companion:** [http://localhost:3000](http://localhost:3000) (Or scan the QR code displayed on the TV!)
-- **Chrome Extension:** Load unpacked in `chrome://extensions` from `apps/extension/dist`.
+### Detailed Setup Instructions & Run Guides
+
+👉 **[INSTRUCTIONS.md](INSTRUCTIONS.md)**: Complete step-by-step instructions for Amazon Fire TV (Physical TV, Emulator, and Web Simulator) and the Chrome Browser Extension (Building, Loading Unpacked, Streaming Provider Integration).  
+👉 **[ANDROID_STUDIO_GUIDE.md](ANDROID_STUDIO_GUIDE.md)**: Dedicated step-by-step guide for building and debugging the native Android TV app in Android Studio.
 
 ### Option B: Building & Installing the Native Fire TV APK
 

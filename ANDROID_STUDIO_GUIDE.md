@@ -2,6 +2,9 @@
 
 This guide walks you step-by-step through opening, building, running, and debugging the **SceneSync Fire TV Application** using **Android Studio**, targeting either a Fire TV Virtual Device (Emulator) or a physical Amazon Fire TV Stick / Cube.
 
+> [!TIP]
+> For complete end-to-end instructions covering the **Chrome Browser Extension**, **Smartphone Companion Controller**, and **Web TV Simulator**, see **[INSTRUCTIONS.md](INSTRUCTIONS.md)**.
+
 ---
 
 ## 1. Prerequisites
