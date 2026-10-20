@@ -152,7 +152,10 @@ Open:
 
 ### Option B: Building & Installing the Native Fire TV APK
 
-To build the native Android TV APK:
+To build and run from **Android Studio** or on a physical Amazon Fire TV Stick, please see the complete step-by-step guide:
+👉 **[ANDROID_STUDIO_GUIDE.md](ANDROID_STUDIO_GUIDE.md)**
+
+To build from command line:
 
 ```bash
 cd apps/fire-tv/android
