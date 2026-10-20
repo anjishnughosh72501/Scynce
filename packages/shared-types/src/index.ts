@@ -96,6 +96,84 @@ export interface BoundarySnapshot {
 }
 
 // ==========================================
+// Extension & Multi-Surface Models
+// ==========================================
+
+export type StreamingProviderId = 'netflix' | 'prime-video' | 'hotstar' | 'fallback';
+
+export type DetectionMethod =
+  | 'url'
+  | 'dom_metadata'
+  | 'dom_player'
+  | 'manual_confirmed'
+  | 'unverified';
+
+export interface DetectedStreamingContext {
+  providerId: StreamingProviderId;
+  showTitle: string;
+  seasonNumber?: number | null;
+  episodeNumber?: number | null;
+  episodeTitle?: string | null;
+  canonicalContentId?: string | null;
+  detectionMethod: DetectionMethod;
+  confidence: number; // 0.0 to 1.0
+  lastDetectedAt: string;
+}
+
+export interface ProviderCapabilities {
+  canDetectShowTitle: boolean;
+  canDetectEpisode: boolean;
+  canDetectTimeOffset: boolean;
+  requiresManualConfirmation: boolean;
+  verificationStatus: 'verified_automated' | 'verified_manual_fallback' | 'unverified';
+  supportedDomains: string[];
+}
+
+export type ResponseDestination = 'all' | 'sidepanel' | 'tv' | 'phone';
+
+export type ExtensionCommandType =
+  | 'SET_ACTIVE_SESSION'
+  | 'SET_CONTENT_CONTEXT'
+  | 'REQUEST_RECAP'
+  | 'REQUEST_CHARACTER_EXPLANATION'
+  | 'SUBMIT_QUESTION'
+  | 'SET_DISPLAY_DESTINATION'
+  | 'DISCONNECT_EXTENSION';
+
+export interface ExtensionCommand {
+  commandId: string;
+  type: ExtensionCommandType;
+  payload: any;
+  issuedBy: string;
+  issuedAt: string;
+}
+
+export interface ExtensionLinking {
+  id: string;
+  installationId: string;
+  ownerId: string;
+  sessionId: string | null;
+  providerId: StreamingProviderId | null;
+  detectedContentContext: DetectedStreamingContext | null;
+  confirmedContentContext: DetectedStreamingContext | null;
+  connectionStatus: 'connected' | 'disconnected' | 'revoked';
+  displayDestination: ResponseDestination;
+  lastSeenAt: string;
+  revokedAt: string | null;
+  createdAt: string;
+}
+
+export interface ExtensionDeviceState {
+  installationId: string;
+  providerId: StreamingProviderId | null;
+  connectionStatus: 'connected' | 'disconnected' | 'revoked';
+  detectedContext: DetectedStreamingContext | null;
+  confirmedContext: DetectedStreamingContext | null;
+  displayDestination: ResponseDestination;
+  lastSeenAt: string;
+}
+
+// ==========================================
 // Recap & Q&A Models
 // ==========================================
 
@@ -138,6 +216,8 @@ export interface QuestionAnswer {
   answerBody: string;
   claims: string[];
   evidenceIds: string[];
+  destination?: ResponseDestination;
+  sourceClient?: 'phone' | 'extension' | 'fire-tv';
   createdAt: string;
 }
 
@@ -176,7 +256,20 @@ export type RealTimeEventName =
   | 'session.started'
   | 'session.ended'
   | 'question.submitted'
-  | 'answer.ready';
+  | 'answer.ready'
+  | 'extension.connected'
+  | 'extension.disconnected'
+  | 'extension.context.detected'
+  | 'extension.context.confirmed'
+  | 'extension.context.changed'
+  | 'extension.session.joined'
+  | 'extension.session.left'
+  | 'extension.boundary.updated'
+  | 'extension.recap.ready'
+  | 'extension.question.submitted'
+  | 'extension.answer.ready'
+  | 'extension.command.dispatched'
+  | 'extension.error';
 
 export interface RealTimeEventPayloads {
   'member.joined': { sessionId: string; member: SessionMember };
@@ -185,8 +278,21 @@ export interface RealTimeEventPayloads {
   'session.boundary_updated': { sessionId: string; boundary: BoundarySnapshot };
   'session.started': { sessionId: string; boundary: BoundarySnapshot };
   'session.ended': { sessionId: string };
-  'question.submitted': { sessionId: string; questionId: string; question: string; memberId: string };
+  'question.submitted': { sessionId: string; questionId: string; question: string; memberId: string; destination?: ResponseDestination; sourceClient?: string };
   'answer.ready': { sessionId: string; questionAnswer: QuestionAnswer };
+  'extension.connected': { sessionId: string; extension: ExtensionDeviceState };
+  'extension.disconnected': { sessionId: string; installationId: string };
+  'extension.context.detected': { sessionId: string; installationId: string; context: DetectedStreamingContext };
+  'extension.context.confirmed': { sessionId: string; installationId: string; context: DetectedStreamingContext };
+  'extension.context.changed': { sessionId: string; installationId: string; context: DetectedStreamingContext };
+  'extension.session.joined': { sessionId: string; installationId: string };
+  'extension.session.left': { sessionId: string; installationId: string };
+  'extension.boundary.updated': { sessionId: string; boundary: BoundarySnapshot };
+  'extension.recap.ready': { sessionId: string; recap: Recap };
+  'extension.question.submitted': { sessionId: string; questionId: string; question: string };
+  'extension.answer.ready': { sessionId: string; questionAnswer: QuestionAnswer };
+  'extension.command.dispatched': { sessionId: string; command: ExtensionCommand };
+  'extension.error': { sessionId: string; installationId: string; message: string };
 }
 
 export interface RealTimeMessage<T extends RealTimeEventName = RealTimeEventName> {
@@ -211,7 +317,7 @@ export const JoinSessionSchema = z.object({
   roomCode: z.string().optional(),
   displayName: z.string().min(1, 'Display name is required').max(50),
   initialEpisodeId: z.string().nullable().optional(),
-}).refine(data => data.invitationToken || data.roomCode, {
+}).refine((data) => data.invitationToken || data.roomCode, {
   message: 'Either invitationToken or roomCode must be provided',
 });
 export type JoinSessionInput = z.infer<typeof JoinSessionSchema>;
@@ -223,5 +329,46 @@ export type UpdateProgressInput = z.infer<typeof UpdateProgressSchema>;
 
 export const SubmitQuestionSchema = z.object({
   question: z.string().min(1, 'Question text cannot be empty').max(300),
+  destination: z.enum(['all', 'sidepanel', 'tv', 'phone']).optional().default('all'),
+  sourceClient: z.enum(['phone', 'extension', 'fire-tv']).optional().default('phone'),
 });
 export type SubmitQuestionInput = z.infer<typeof SubmitQuestionSchema>;
+
+export const LinkExtensionSchema = z.object({
+  installationId: z.string().min(1, 'installationId is required'),
+  ownerId: z.string().min(1, 'ownerId is required'),
+  sessionId: z.string().nullable().optional(),
+  providerId: z.enum(['netflix', 'prime-video', 'hotstar', 'fallback']).nullable().optional(),
+});
+export type LinkExtensionInput = z.infer<typeof LinkExtensionSchema>;
+
+export const UpdateExtensionContextSchema = z.object({
+  context: z.object({
+    providerId: z.enum(['netflix', 'prime-video', 'hotstar', 'fallback']),
+    showTitle: z.string(),
+    seasonNumber: z.number().nullable().optional(),
+    episodeNumber: z.number().nullable().optional(),
+    episodeTitle: z.string().nullable().optional(),
+    canonicalContentId: z.string().nullable().optional(),
+    detectionMethod: z.enum(['url', 'dom_metadata', 'dom_player', 'manual_confirmed', 'unverified']),
+    confidence: z.number().min(0).max(1),
+    lastDetectedAt: z.string(),
+  }),
+  isConfirmed: z.boolean().optional().default(false),
+});
+export type UpdateExtensionContextInput = z.infer<typeof UpdateExtensionContextSchema>;
+
+export const DispatchExtensionCommandSchema = z.object({
+  type: z.enum([
+    'SET_ACTIVE_SESSION',
+    'SET_CONTENT_CONTEXT',
+    'REQUEST_RECAP',
+    'REQUEST_CHARACTER_EXPLANATION',
+    'SUBMIT_QUESTION',
+    'SET_DISPLAY_DESTINATION',
+    'DISCONNECT_EXTENSION',
+  ]),
+  payload: z.any().optional(),
+  targetInstallationId: z.string().optional(),
+});
+export type DispatchExtensionCommandInput = z.infer<typeof DispatchExtensionCommandSchema>;

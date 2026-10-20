@@ -4,6 +4,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { initSocketServer } from './ws/socket.js';
 import { catalogRoutes } from './routes/catalog.routes.js';
 import { sessionRoutes } from './routes/sessions.routes.js';
+import { extensionRoutes } from './routes/extension.routes.js';
 
 export function buildServer() {
   const fastify = Fastify({
@@ -26,6 +27,7 @@ export function buildServer() {
   // Register API routes
   fastify.register(catalogRoutes, { prefix: '/api' });
   fastify.register(sessionRoutes, { prefix: '/api' });
+  fastify.register(extensionRoutes, { prefix: '/api' });
 
   // Socket.io initialization
   const io = new SocketIOServer(fastify.server, {

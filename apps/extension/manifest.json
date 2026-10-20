@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "SceneSync Watch Party Companion",
+  "version": "1.0.0",
+  "description": "Spoiler-safe AI watch party companion for desktop streaming services (Netflix, Prime Video, JioHotstar)",
+  "permissions": [
+    "storage",
+    "sidePanel",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "*://*.netflix.com/*",
+    "*://*.primevideo.com/*",
+    "*://*.amazon.com/*",
+    "*://*.hotstar.com/*",
+    "*://*.jiostar.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "dist/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "SceneSync"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.netflix.com/*",
+        "*://*.primevideo.com/*",
+        "*://*.amazon.com/*",
+        "*://*.hotstar.com/*",
+        "*://*.jiostar.com/*"
+      ],
+      "js": [
+        "dist/bootstrap.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

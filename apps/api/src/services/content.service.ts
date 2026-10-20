@@ -210,8 +210,18 @@ export class ContentService {
     memberId: string;
     question: string;
     currentBoundary: BoundarySnapshot;
+    destination?: 'all' | 'sidepanel' | 'tv' | 'phone';
+    sourceClient?: 'phone' | 'extension' | 'fire-tv';
   }): Promise<QuestionAnswer> {
-    const { sessionId, showId, memberId, question, currentBoundary } = params;
+    const {
+      sessionId,
+      showId,
+      memberId,
+      question,
+      currentBoundary,
+      destination = 'all',
+      sourceClient = 'phone',
+    } = params;
     const questionId = `qa_${nanoid(12)}`;
 
     // Cache check
@@ -223,6 +233,8 @@ export class ContentService {
         id: questionId,
         sessionId,
         memberId,
+        destination,
+        sourceClient,
         createdAt: new Date().toISOString(),
       };
     }
@@ -253,12 +265,17 @@ export class ContentService {
       question,
     });
 
-    const finalAnswer = validation.sanitizedAnswer;
+    const finalAnswer: QuestionAnswer = {
+      ...validation.sanitizedAnswer,
+      destination,
+      sourceClient,
+    };
 
     // 4. Persist QA record into database
     await pool.query(
-      `INSERT INTO questions_and_answers (id, session_id, member_id, question, boundary_snapshot, answer_status, answer_body, claims, evidence_ids)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      `INSERT INTO questions_and_answers (
+        id, session_id, member_id, question, boundary_snapshot, answer_status, answer_body, claims, evidence_ids, destination, source_client
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [
         finalAnswer.id,
         finalAnswer.sessionId,
@@ -269,6 +286,8 @@ export class ContentService {
         finalAnswer.answerBody,
         JSON.stringify(finalAnswer.claims),
         JSON.stringify(finalAnswer.evidenceIds),
+        finalAnswer.destination,
+        finalAnswer.sourceClient,
       ]
     );
 

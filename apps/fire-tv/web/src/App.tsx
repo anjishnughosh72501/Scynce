@@ -26,6 +26,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   Play,
+  Laptop,
+  Smartphone,
 } from 'lucide-react';
 import { useTvNavigation } from './hooks/useTvNavigation.js';
 import { FireTvRemote } from './components/FireTvRemote.js';
@@ -44,6 +46,7 @@ export function App() {
   // Watch Party State
   const [session, setSession] = useState<Session | null>(null);
   const [members, setMembers] = useState<SessionMember[]>([]);
+  const [linkedExtensions, setLinkedExtensions] = useState<any[]>([]);
   const [boundary, setBoundary] = useState<BoundarySnapshot | null>(null);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [joinUrl, setJoinUrl] = useState<string | null>(null);
@@ -148,10 +151,55 @@ export function App() {
       });
     });
 
+    socket.on('extension.connected', () => {
+      if (session) fetchExtensions(session.id);
+    });
+
+    socket.on('extension.revoked', (payload: any) => {
+      setLinkedExtensions((prev) =>
+        prev.filter((e) => e.installationId !== payload.installationId)
+      );
+    });
+
+    socket.on('extension.context.detected', (payload: any) => {
+      setLinkedExtensions((prev) =>
+        prev.map((e) =>
+          e.installationId === payload.installationId
+            ? { ...e, detectedContentContext: payload.context }
+            : e
+        )
+      );
+    });
+
+    socket.on('extension.context.confirmed', (payload: any) => {
+      setLinkedExtensions((prev) =>
+        prev.map((e) =>
+          e.installationId === payload.installationId
+            ? { ...e, confirmedContentContext: payload.context }
+            : e
+        )
+      );
+    });
+
+    // Initial fetch of extensions
+    fetchExtensions(session.id);
+
     return () => {
       socket.disconnect();
     };
   }, [session?.id]);
+
+  const fetchExtensions = async (sessId: string) => {
+    try {
+      const res = await fetch(`/api/sessions/${sessId}/extensions`);
+      const data = await res.json();
+      if (data.extensions) {
+        setLinkedExtensions(data.extensions);
+      }
+    } catch (err) {
+      console.error('Failed to load extensions:', err);
+    }
+  };
 
   const fetchRecap = async (sessId: string) => {
     try {
@@ -332,6 +380,13 @@ export function App() {
             <div className="bg-slate-900/90 border border-slate-800 px-4 py-2 rounded-2xl flex items-center gap-2 text-sm">
               <Users className="w-4 h-4 text-purple-400" />
               <span className="font-semibold text-slate-200">{members.length} Watching</span>
+            </div>
+
+            <div className="bg-slate-900/90 border border-slate-800 px-4 py-2 rounded-2xl flex items-center gap-2 text-sm">
+              <Laptop className="w-4 h-4 text-sky-400" />
+              <span className="font-semibold text-slate-200">
+                {linkedExtensions.length} {linkedExtensions.length === 1 ? 'Extension' : 'Extensions'}
+              </span>
             </div>
           </div>
         )}
@@ -559,7 +614,7 @@ export function App() {
                 <span>Connected Participants ({members.length})</span>
               </h4>
 
-              <div className="space-y-3 overflow-y-auto max-h-72 pr-2">
+              <div className="space-y-3 overflow-y-auto max-h-56 pr-2">
                 {members.map((m) => {
                   const ep = episodes.find((e) => e.id === m.lastWatchedEpisodeId);
                   return (
@@ -583,6 +638,42 @@ export function App() {
                   );
                 })}
               </div>
+            </div>
+
+            {/* Desktop Extensions list */}
+            <div className="bg-slate-900/80 border border-slate-800 rounded-3xl p-5 flex flex-col">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
+                <Laptop className="w-4 h-4 text-sky-400" />
+                <span>Connected Desktop Extensions ({linkedExtensions.length})</span>
+              </h4>
+
+              {linkedExtensions.length === 0 ? (
+                <p className="text-xs text-slate-500 italic py-1">
+                  No browser extensions connected yet. Connect desktop streaming to sync playback.
+                </p>
+              ) : (
+                <div className="space-y-2 overflow-y-auto max-h-36 pr-2">
+                  {linkedExtensions.map((ext) => {
+                    const ctx = ext.confirmedContentContext || ext.detectedContentContext;
+                    return (
+                      <div
+                        key={ext.installationId}
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60 text-xs"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse"></span>
+                          <span className="font-bold text-slate-200 uppercase tracking-wider">
+                            {ext.providerId}
+                          </span>
+                        </div>
+                        <span className="text-sky-300 font-mono">
+                          {ctx ? `S${ctx.seasonNumber ?? '?'} E${ctx.episodeNumber ?? '?'}` : 'Monitoring'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </main>
@@ -835,25 +926,44 @@ export function App() {
                 </span>
               </div>
 
-              {qaFeed.length === 0 ? (
+              {qaFeed.filter((i) => !i.destination || i.destination === 'all' || i.destination === 'tv').length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
                   <MessageSquare className="w-12 h-12 mb-3 text-slate-600" />
                   <p className="text-base font-semibold">No questions asked yet.</p>
                   <p className="text-xs text-slate-500 mt-1">
-                    Scan the QR code on your phone to submit questions safely!
+                    Scan the QR code on your phone or ask via desktop extension safely!
                   </p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {qaFeed.map((item) => (
+                  {qaFeed
+                    .filter((item) => !item.destination || item.destination === 'all' || item.destination === 'tv')
+                    .map((item) => (
                     <div
                       key={item.id}
                       className="bg-slate-800/70 border border-slate-700/70 rounded-2xl p-5 shadow-lg"
                     >
                       <div className="flex items-center justify-between mb-2">
-                        <span className="font-bold text-purple-300 text-sm">
-                          Q: {item.question}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-purple-300 text-sm">
+                            Q: {item.question}
+                          </span>
+                          {item.sourceClient === 'extension' && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-sky-950 text-sky-300 border border-sky-800 flex items-center gap-1">
+                              <Laptop className="w-3 h-3" /> Extension
+                            </span>
+                          )}
+                          {item.sourceClient === 'phone' && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-purple-950 text-purple-300 border border-purple-800 flex items-center gap-1">
+                              <Smartphone className="w-3 h-3" /> Phone
+                            </span>
+                          )}
+                          {item.sourceClient === 'fire-tv' && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-950 text-amber-300 border border-amber-800 flex items-center gap-1">
+                              <Tv className="w-3 h-3" /> Fire TV
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-1.5">
                           {item.answerStatus === 'verified' ? (
                             <span className="text-xs uppercase font-bold text-emerald-400 flex items-center gap-1">

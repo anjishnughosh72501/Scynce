@@ -1,1 +1,0 @@
-{"root":["./src/index.ts","./src/server.ts","./src/db/client.ts","./src/db/migrate.ts","./src/db/seed.ts","./src/routes/catalog.routes.ts","./src/routes/sessions.routes.ts","./src/services/content.service.ts","./src/services/session.service.ts","./src/ws/socket.ts"],"version":"5.9.3"}

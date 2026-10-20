@@ -170,10 +170,19 @@ export const sessionRoutes: FastifyPluginAsync = async (fastify) => {
           memberId,
           question: parse.data.question,
           currentBoundary: state.boundary,
+          destination: parse.data.destination,
+          sourceClient: parse.data.sourceClient,
         });
 
         // Broadcast question and verified answer
-        realTimeBus.questionSubmitted(req.params.id, answer.id, parse.data.question, memberId);
+        realTimeBus.questionSubmitted(
+          req.params.id,
+          answer.id,
+          parse.data.question,
+          memberId,
+          parse.data.destination,
+          parse.data.sourceClient
+        );
         realTimeBus.answerReady(req.params.id, answer);
 
         return reply.status(201).send({ success: true, answer });

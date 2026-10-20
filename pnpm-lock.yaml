@@ -113,6 +113,58 @@ importers:
         specifier: ^6.0.7
         version: 6.4.4(@types/node@22.20.5)(jiti@1.21.7)(tsx@4.23.15)
 
+  apps/extension:
+    dependencies:
+      '@scenesync/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      lucide-react:
+        specifier: ^0.469.0
+        version: 0.469.0(react@18.3.1)
+      nanoid:
+        specifier: ^5.0.9
+        version: 5.1.16
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
+      socket.io-client:
+        specifier: ^4.8.1
+        version: 4.8.4
+    devDependencies:
+      '@types/chrome':
+        specifier: ^0.0.280
+        version: 0.0.280
+      '@types/react':
+        specifier: ^18.3.18
+        version: 18.3.31
+      '@types/react-dom':
+        specifier: ^18.3.5
+        version: 18.3.7(@types/react@18.3.31)
+      '@vitejs/plugin-react':
+        specifier: ^4.3.4
+        version: 4.7.0(vite@6.4.4(@types/node@22.20.5)(jiti@1.21.7)(tsx@4.23.15))
+      autoprefixer:
+        specifier: ^10.4.20
+        version: 10.6.1(postcss@8.5.31)
+      postcss:
+        specifier: ^8.4.49
+        version: 8.5.31
+      tailwindcss:
+        specifier: ^3.4.17
+        version: 3.4.19(tsx@4.23.15)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vite:
+        specifier: ^6.0.7
+        version: 6.4.4(@types/node@22.20.5)(jiti@1.21.7)(tsx@4.23.15)
+
   apps/fire-tv/web:
     dependencies:
       '@scenesync/shared-types':
@@ -949,11 +1001,23 @@ packages:
   '@types/babel__traverse@7.28.0':
     resolution: {integrity: sha512-8PvcXf70gTDZBgt9ptxJ8elBeBjcLOAcOtoO/mPJjtji1+CdGbHgm77om1GrsPxsiE+uXIpNSK64UYaIwQXd4Q==}
 
+  '@types/chrome@0.0.280':
+    resolution: {integrity: sha512-AotSmZrL9bcZDDmSI1D9dE7PGbhOur5L0cKxXd7IqbVizQWCY4gcvupPUVsQ4FfDj3V2tt/iOpomT9EY0s+w1g==}
+
   '@types/cors@2.8.19':
     resolution: {integrity: sha512-mFNylyeyqN93lfe/9CSxOGREz8cpzAhH+E93xJ4xWQf62V8sQ/24reV2nyzUWM6H6Xji+GGHpkbLe7pVoUEskg==}
 
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
+
+  '@types/filesystem@0.0.36':
+    resolution: {integrity: sha512-vPDXOZuannb9FZdxgHnqSwAG/jvdGM8Wq+6N4D/d80z+D4HWH+bItqsZaVRQykAn6WEVeEkLm2oQigyHtgb0RA==}
+
+  '@types/filewriter@0.0.33':
+    resolution: {integrity: sha512-xFU8ZXTw4gd358lb2jw25nxY9QAgqn2+bKKjKOYfNCzN4DKCFetK7sPtrlpg66Ywe3vWY9FNxprZawAh9wfJ3g==}
+
+  '@types/har-format@1.2.16':
+    resolution: {integrity: sha512-fluxdy7ryD3MV6h8pTfTYpy/xQzCFC7m89nOH9y94cNqJ1mDIDPut7MnRHI3F6qRmh/cT2fUjG1MLdCNb4hE9A==}
 
   '@types/node@22.20.5':
     resolution: {integrity: sha512-U2+DNr+wSjpsTS/wZGYHq7GcwfuSmKiKvoPvK22zwTlRhU91yOniN4qRR5KhIjvif7ysw/dz/hKmfDH0Ris4aA==}
@@ -2502,11 +2566,24 @@ snapshots:
     dependencies:
       '@babel/types': 7.29.8
 
+  '@types/chrome@0.0.280':
+    dependencies:
+      '@types/filesystem': 0.0.36
+      '@types/har-format': 1.2.16
+
   '@types/cors@2.8.19':
     dependencies:
       '@types/node': 22.20.5
 
   '@types/estree@1.0.9': {}
+
+  '@types/filesystem@0.0.36':
+    dependencies:
+      '@types/filewriter': 0.0.33
+
+  '@types/filewriter@0.0.33': {}
+
+  '@types/har-format@1.2.16': {}
 
   '@types/node@22.20.5':
     dependencies:

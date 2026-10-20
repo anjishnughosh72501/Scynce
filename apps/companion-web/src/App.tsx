@@ -7,6 +7,9 @@ import {
   Episode,
   QuestionAnswer,
   Show,
+  ExtensionDeviceState,
+  ResponseDestination,
+  ExtensionCommandType,
 } from '@scenesync/shared-types';
 import {
   ShieldCheck,
@@ -19,6 +22,11 @@ import {
   HelpCircle,
   CheckCircle2,
   Clock,
+  Monitor,
+  Laptop,
+  Sliders,
+  SendHorizontal,
+  ChevronDown,
 } from 'lucide-react';
 
 export function App() {
@@ -29,6 +37,14 @@ export function App() {
   const [boundary, setBoundary] = useState<BoundarySnapshot | null>(null);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [show, setShow] = useState<Show | null>(null);
+
+  // Extension Controllers
+  const [extensions, setExtensions] = useState<ExtensionDeviceState[]>([]);
+  const [responseDestination, setResponseDestination] = useState<ResponseDestination>('all');
+  const [isEditingContext, setIsEditingContext] = useState(false);
+  const [overrideShowTitle, setOverrideShowTitle] = useState('Chronicles of Aethelgard');
+  const [overrideSeason, setOverrideSeason] = useState(1);
+  const [overrideEpisode, setOverrideEpisode] = useState(6);
 
   // Q&A State
   const [questionInput, setQuestionInput] = useState('');
@@ -114,10 +130,49 @@ export function App() {
       });
     });
 
+    socket.on('extension.connected', (payload: any) => {
+      setExtensions((prev) => {
+        const filtered = prev.filter((e) => e.installationId !== payload.extension.installationId);
+        return [payload.extension, ...filtered];
+      });
+    });
+
+    socket.on('extension.disconnected', (payload: any) => {
+      setExtensions((prev) => prev.filter((e) => e.installationId !== payload.installationId));
+    });
+
+    socket.on('extension.context.detected', (payload: any) => {
+      setExtensions((prev) =>
+        prev.map((e) =>
+          e.installationId === payload.installationId
+            ? { ...e, detectedContext: payload.context }
+            : e
+        )
+      );
+    });
+
+    socket.on('extension.context.confirmed', (payload: any) => {
+      setExtensions((prev) =>
+        prev.map((e) =>
+          e.installationId === payload.installationId
+            ? { ...e, confirmedContext: payload.context }
+            : e
+        )
+      );
+    });
+
     socket.on('session.ended', () => {
       alert('The watch party has ended.');
       setSession(null);
     });
+
+    // Fetch initially linked extensions
+    fetch(`/api/sessions/${session.id}/extensions`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.extensions) setExtensions(data.extensions);
+      })
+      .catch(() => {});
 
     return () => {
       socket.disconnect();
@@ -206,6 +261,8 @@ export function App() {
         },
         body: JSON.stringify({
           question: text.trim(),
+          destination: responseDestination,
+          sourceClient: 'phone',
         }),
       });
 
@@ -222,6 +279,41 @@ export function App() {
     } finally {
       setIsSubmittingQuestion(false);
     }
+  };
+
+  const handleSendExtensionCommand = async (type: ExtensionCommandType, payload: any = {}) => {
+    if (!session || !myMember) return;
+
+    try {
+      await fetch(`/api/sessions/${session.id}/extensions/command`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-member-id': myMember.id,
+        },
+        body: JSON.stringify({
+          type,
+          payload,
+        }),
+      });
+    } catch (err) {
+      console.error('Command dispatch failed:', err);
+    }
+  };
+
+  const handleConfirmRemoteContext = async () => {
+    await handleSendExtensionCommand('SET_CONTENT_CONTEXT', {
+      context: {
+        providerId: extensions[0]?.providerId || 'fallback',
+        showTitle: overrideShowTitle,
+        seasonNumber: overrideSeason,
+        episodeNumber: overrideEpisode,
+        detectionMethod: 'manual_confirmed',
+        confidence: 1.0,
+        lastDetectedAt: new Date().toISOString(),
+      },
+    });
+    setIsEditingContext(false);
   };
 
   const handleLeaveSession = async () => {
@@ -259,7 +351,7 @@ export function App() {
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl">
           <div className="flex items-center gap-2 mb-6 text-purple-400 text-sm font-semibold">
             <ShieldCheck className="w-5 h-5" />
-            <span>Join Fire TV Watch Party</span>
+            <span>Join Watch Party Room</span>
           </div>
 
           {errorMsg && (
@@ -287,7 +379,7 @@ export function App() {
             {!invitationToken && (
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-                  Room Code (from TV)
+                  Room Code (from TV or Desktop)
                 </label>
                 <input
                   type="text"
@@ -383,10 +475,146 @@ export function App() {
                 {boundary?.label || 'Calculating Boundary...'}
               </h3>
               <p className="text-xs text-slate-400 mt-1">
-                All recaps & character answers are restricted by the group's slowest viewer.
+                Synchronized across your phone, Fire TV, and Chrome extensions.
               </p>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Extension Remote Controller Section */}
+      <div className="px-4 mb-4">
+        <div className="bg-slate-900/90 border border-purple-500/30 rounded-2xl p-4 shadow-lg">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Laptop className="w-4 h-4 text-purple-400" />
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                Connected Desktop Extension
+              </span>
+            </div>
+            <span
+              className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                extensions.length > 0
+                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                  : 'bg-slate-800 text-slate-400'
+              }`}
+            >
+              {extensions.length > 0 ? `${extensions.length} Linked` : 'Waiting for Extension'}
+            </span>
+          </div>
+
+          {extensions.length > 0 ? (
+            <div className="space-y-2.5">
+              {extensions.map((ext) => {
+                const ctx = ext.confirmedContext || ext.detectedContext;
+                return (
+                  <div
+                    key={ext.installationId}
+                    className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 text-xs"
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="font-semibold text-purple-300 uppercase">
+                        {ext.providerId || 'Browser Stream'}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        ID: {ext.installationId.substring(0, 8)}
+                      </span>
+                    </div>
+
+                    {!isEditingContext ? (
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-bold text-white text-sm">
+                            {ctx?.showTitle || 'Waiting for stream detection...'}
+                          </div>
+                          <div className="text-slate-400 text-xs mt-0.5">
+                            {ctx?.seasonNumber
+                              ? `Season ${ctx.seasonNumber} • Episode ${ctx.episodeNumber}`
+                              : 'No episode detected yet'}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setIsEditingContext(true)}
+                          className="px-2.5 py-1 bg-purple-950/80 hover:bg-purple-900/80 text-purple-300 border border-purple-800 rounded-lg text-xs font-semibold flex items-center gap-1"
+                        >
+                          <Sliders className="w-3 h-3" />
+                          <span>Override</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 mt-2 pt-2 border-t border-slate-700">
+                        <input
+                          type="text"
+                          value={overrideShowTitle}
+                          onChange={(e) => setOverrideShowTitle(e.target.value)}
+                          placeholder="Show Title"
+                          className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs"
+                        />
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            value={overrideSeason}
+                            onChange={(e) => setOverrideSeason(parseInt(e.target.value, 10))}
+                            placeholder="Season"
+                            className="w-1/2 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs"
+                          />
+                          <input
+                            type="number"
+                            value={overrideEpisode}
+                            onChange={(e) => setOverrideEpisode(parseInt(e.target.value, 10))}
+                            placeholder="Episode"
+                            className="w-1/2 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs"
+                          />
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <button
+                            onClick={handleConfirmRemoteContext}
+                            className="flex-1 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-semibold text-xs"
+                          >
+                            Send to Extension
+                          </button>
+                          <button
+                            onClick={() => setIsEditingContext(false)}
+                            className="px-2.5 py-1 bg-slate-700 text-slate-300 rounded-lg text-xs"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Remote Controls */}
+                    <div className="mt-2.5 pt-2 border-t border-slate-700/60 flex gap-2">
+                      <button
+                        onClick={() =>
+                          handleSendExtensionCommand('SET_ACTIVE_SESSION', {
+                            sessionId: session.id,
+                          })
+                        }
+                        className="flex-1 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[10px] font-semibold"
+                      >
+                        Resync Session
+                      </button>
+                      <button
+                        onClick={() =>
+                          handleSendExtensionCommand('DISCONNECT_EXTENSION')
+                        }
+                        className="px-2 py-1 bg-red-950/40 hover:bg-red-900/40 text-red-300 border border-red-800/40 rounded-lg text-[10px] font-semibold"
+                      >
+                        Disconnect
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400">
+              Open Netflix, Prime Video, or JioHotstar on your desktop with the SceneSync Chrome
+              extension installed, then enter room code{' '}
+              <span className="font-mono text-purple-300 font-bold">{session.roomCode}</span>.
+            </p>
+          )}
         </div>
       </div>
 
@@ -456,12 +684,29 @@ export function App() {
         </div>
       </div>
 
-      {/* Ask Question Section */}
+      {/* Ask Question & Routing Destination Section */}
       <div className="px-4 mb-4">
         <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4">
-          <div className="flex items-center gap-2 mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">
-            <Sparkles className="w-4 h-4 text-purple-400" />
-            <span>Ask SceneSync AI</span>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400">
+              <Sparkles className="w-4 h-4 text-purple-400" />
+              <span>Ask SceneSync AI</span>
+            </div>
+
+            {/* Response Destination Selector */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] uppercase font-bold text-slate-500">Route to:</span>
+              <select
+                value={responseDestination}
+                onChange={(e) => setResponseDestination(e.target.value as ResponseDestination)}
+                className="bg-slate-800 border border-slate-700 text-[11px] text-purple-300 font-semibold px-2 py-1 rounded-lg focus:outline-none"
+              >
+                <option value="all">All Surfaces</option>
+                <option value="sidepanel">Extension Sidepanel Only</option>
+                <option value="tv">Fire TV Display Only</option>
+                <option value="phone">Phone Only</option>
+              </select>
+            </div>
           </div>
 
           {/* Suggested Quick Questions */}
@@ -550,7 +795,7 @@ export function App() {
                     </span>
                   </div>
                   <span className="text-[10px] text-slate-500 font-mono">
-                    {ans.boundarySnapshot.label}
+                    {ans.boundarySnapshot?.label}
                   </span>
                 </div>
 
